@@ -13,6 +13,13 @@ from tabbed_keycodes import TabbedKeycodes, keycode_filter_masked
 from util import tr, KeycodeDisplay
 from vial_device import VialKeyboard
 
+class KeyEditHistoryEntry(object):
+    def __init__(self, key_index, layer, prev_keycode, new_keycode):
+        self.key_index = key_index
+        self.layer = layer
+        self.prev_keycode = prev_keycode
+        self.new_keycode = new_keycode
+
 
 class ClickableWidget(QWidget):
 
@@ -27,6 +34,8 @@ class KeymapEditor(BasicEditor):
 
     def __init__(self, layout_editor):
         super().__init__()
+
+        self.key_edit_history = list()
 
         self.layout_editor = layout_editor
 
@@ -70,6 +79,13 @@ class KeymapEditor(BasicEditor):
 
         self.device = None
         KeycodeDisplay.notify_keymap_override(self)
+
+    def on_undo(self):
+        if self.key_edit_history:
+            entry = self.key_edit_history.pop()
+            self.switch_layer(entry.layer)
+            self.container.select_key_at_index(entry.key_index)
+            self.set_key(entry.prev_keycode, append_history=False, select_next=False)
 
     def on_empty_space_clicked(self):
         self.container.deselect()
@@ -119,6 +135,7 @@ class KeymapEditor(BasicEditor):
 
             self.container.set_keys(self.keyboard.keys, self.keyboard.encoders)
 
+            self.key_edit_history = list()
             self.current_layer = 0
             self.on_layout_changed()
 
@@ -188,18 +205,34 @@ class KeymapEditor(BasicEditor):
         self.current_layer = idx
         self.refresh_layer_display()
 
-    def set_key(self, keycode):
+    def get_key(self):
+        if isinstance(self.container.active_key, EncoderWidget):
+            return self.get_key_encoder()
+        return self.get_key_matrix()
+
+    def set_key(self, keycode, append_history=True, select_next=True):
         """ Change currently selected key to provided keycode """
 
         if self.container.active_key is None:
             return
+
+        if append_history:
+            prev_keycode = self.get_key()
+            entry = KeyEditHistoryEntry(self.container.active_key_index, self.current_layer, prev_keycode, keycode)
+            self.key_edit_history.append(entry)
 
         if isinstance(self.container.active_key, EncoderWidget):
             self.set_key_encoder(keycode)
         else:
             self.set_key_matrix(keycode)
 
-        self.container.select_next()
+        if select_next:
+            self.container.select_next()
+
+    def get_key_encoder(self):
+        l, i, d = self.current_layer, self.container.active_key.desc.encoder_idx,\
+                            self.container.active_key.desc.encoder_dir
+        return self.keyboard.encoder_layout[(l, i, d)]
 
     def set_key_encoder(self, keycode):
         l, i, d = self.current_layer, self.container.active_key.desc.encoder_idx,\
@@ -213,6 +246,10 @@ class KeymapEditor(BasicEditor):
 
         self.keyboard.set_encoder(l, i, d, keycode)
         self.refresh_layer_display()
+
+    def get_key_matrix(self):
+        l, r, c = self.current_layer, self.container.active_key.desc.row, self.container.active_key.desc.col
+        return self.keyboard.layout[(l, r, c)]
 
     def set_key_matrix(self, keycode):
         l, r, c = self.current_layer, self.container.active_key.desc.row, self.container.active_key.desc.col

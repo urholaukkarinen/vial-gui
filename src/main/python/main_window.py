@@ -183,6 +183,13 @@ class MainWindow(QMainWindow):
         keyboard_reset_act.setShortcut("Ctrl+B")
         keyboard_reset_act.triggered.connect(self.reboot_to_bootloader)
 
+        undo_act = QAction(tr("MenuEdit", "Undo"), self)
+        undo_act.setShortcut("Ctrl+Z")
+        undo_act.triggered.connect(self.on_undo)
+
+        edit_menu = self.menuBar().addMenu(tr("Menu", "Edit"))
+        edit_menu.addAction(undo_act)
+
         keyboard_layout_menu = self.menuBar().addMenu(tr("Menu", "Keyboard layout"))
         keymap_group = QActionGroup(self)
         selected_keymap = self.settings.value("keymap")
@@ -247,6 +254,9 @@ class MainWindow(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             with open(dialog.selectedFiles()[0], "wb") as outf:
                 outf.write(self.keymap_editor.save_layout())
+
+    def on_undo(self):
+        self.keymap_editor.on_undo()
 
     def on_click_refresh(self):
         self.autorefresh.update(quiet=False, hard=True)

@@ -276,6 +276,7 @@ class KeyboardWidget(QWidget):
 
         self.width = self.height = 0
         self.active_key = None
+        self.active_key_index = None
         self.active_mask = False
 
     def set_keys(self, keys, encoders):
@@ -478,19 +479,19 @@ class KeyboardWidget(QWidget):
     def hit_test(self, pos):
         """ Returns key, hit_masked_part """
 
-        for key in self.widgets:
+        for key_index, key in enumerate(self.widgets):
             if key.masked and key.mask_polygon.containsPoint(pos/self.scale, Qt.OddEvenFill):
-                return key, True
+                return key, True, key_index
             if key.polygon.containsPoint(pos/self.scale, Qt.OddEvenFill):
-                return key, False
+                return key, False, key_index
 
-        return None, False
+        return None, False, None
 
     def mousePressEvent(self, ev):
         if not self.enabled:
             return
 
-        self.active_key, self.active_mask = self.hit_test(ev.pos())
+        self.active_key, self.active_mask, self.active_key_index = self.hit_test(ev.pos())
         if self.active_key is not None:
             self.clicked.emit()
         else:
@@ -501,22 +502,28 @@ class KeyboardWidget(QWidget):
         if self.isEnabled():
             self.update_layout()
 
-    def select_next(self):
-        """ Selects next key based on their order in the keymap """
+    def select_key_at_index(self, key_index):
+        if key_index is not None:
+            key_index %= len(self.widgets)
 
-        keys_looped = self.widgets + [self.widgets[0]]
-        for x, key in enumerate(keys_looped):
-            if key == self.active_key:
-                self.active_key = keys_looped[x + 1]
+        if key_index != self.active_key_index:
+            self.active_key_index = key_index
+
+            if key_index is None:
+                self.active_key = None
+                self.deselected.emit()
+                self.update()
+            else:
+                self.active_key = self.widgets[self.active_key_index]
                 self.active_mask = False
                 self.clicked.emit()
-                return
+
+    def select_next(self):
+        """ Selects next key based on their order in the keymap """
+        self.select_key_at_index(self.active_key_index + 1)
 
     def deselect(self):
-        if self.active_key is not None:
-            self.active_key = None
-            self.deselected.emit()
-            self.update()
+        self.select_key_at_index(None)
 
     def event(self, ev):
         if not self.enabled:
